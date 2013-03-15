@@ -95,6 +95,16 @@ def _start_engines(node, user, cluster_id, n_engines=None, kill_existing=False):
     node.ssh.switch_user('root')
 
 
+def _str_to_kls(kls_string):
+    """Utility function to instantiate a class from a string such as
+    ipcluster.ClusterID"""
+    data = kls_string.split('.')
+    module = '.'.join(data[:-1])
+    kls = data[-1]
+    kls = getattr(__import__(module, fromlist=[kls]), kls)
+    return kls
+
+
 class ClusterID(object):
     """This class defines the default strategy for
       - identifying the current cluster id
@@ -168,6 +178,8 @@ class IPCluster(DefaultClusterSetup):
             self.packer = None
         else:
             self.packer = packer
+        if isinstance(cluster_id_kls, str):
+            cluster_id_kls = _str_to_kls(cluster_id_kls)
         self.cluster_id_kls = cluster_id_kls
 
     def _check_ipython_installed(self, node):
@@ -403,6 +415,8 @@ class IPClusterStop(DefaultClusterSetup):
     """
     def __init__(self, cluster_id_kls=ClusterID):
         super(IPClusterStop, self).__init__()
+        if isinstance(cluster_id_kls, str):
+            cluster_id_kls = _str_to_kls(cluster_id_kls)
         self.cluster_id_kls = cluster_id_kls
 
     def run(self, nodes, master, user, user_shell, volumes):
@@ -454,6 +468,8 @@ class IPClusterRestartEngines(DefaultClusterSetup):
     """
     def __init__(self, cluster_id_kls=ClusterID):
         super(IPClusterRestartEngines, self).__init__()
+        if isinstance(cluster_id_kls, str):
+            cluster_id_kls = _str_to_kls(cluster_id_kls)
         self.cluster_id_kls = cluster_id_kls
 
     def run(self, nodes, master, user, user_shell, volumes):
