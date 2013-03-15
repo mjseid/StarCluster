@@ -56,7 +56,8 @@ def _kill_cmd(iptype, keepalive_cluster_ids=(), tokill_cluster_ids=()):
     if given tokill_cluster_ids, cmd will kill only `iptype` process
     """
     assert iptype in ['ipengineapp', 'ipcontrollerapp']
-    assert isinstance(keepalive_cluster_ids, list) or isinstance(keepalive_cluster_ids, tuple)
+    assert isinstance(keepalive_cluster_ids, list) or isinstance(
+        keepalive_cluster_ids, tuple)
     assert not set(keepalive_cluster_ids).intersection(tokill_cluster_ids)
     tokill = '(%s)' % '|'.join(cid for cid in tokill_cluster_ids)
     keepalive = "(%s)" % '|'.join(cid for cid in keepalive_cluster_ids)
@@ -72,7 +73,8 @@ def _kill_cmd(iptype, keepalive_cluster_ids=(), tokill_cluster_ids=()):
     return cmd
 
 
-def _start_engines(node, user, cluster_id, n_engines=None, kill_existing=False):
+def _start_engines(node, user, cluster_id, n_engines=None,
+                   kill_existing=False):
     """Launch IPython engines on the given node
 
     Start one engine per CPU except on master where 1 CPU is reserved for house
@@ -88,8 +90,9 @@ def _start_engines(node, user, cluster_id, n_engines=None, kill_existing=False):
         n_engines = node.num_processors
     node.ssh.switch_user(user)
     if kill_existing:
-        node.ssh.execute(_kill_cmd('ipengineapp', tokill_cluster_ids=[cluster_id]),
-                         ignore_exit_status=True)
+        node.ssh.execute(
+            _kill_cmd('ipengineapp', tokill_cluster_ids=[cluster_id]),
+            ignore_exit_status=True)
     node.ssh.execute("ipcluster engines --n=%i --cluster-id %s --daemonize"
                      % (n_engines, cluster_id))
     node.ssh.switch_user('root')
@@ -164,7 +167,7 @@ class IPCluster(DefaultClusterSetup):
     """
     def __init__(self, enable_notebook=False, notebook_passwd=None,
                  notebook_directory=None, packer=None, log_level='INFO',
-                 cluster_id_kls=ClusterID):  # TODO: ClusterID should be a string from config!
+                 cluster_id_kls=ClusterID):
         super(IPCluster, self).__init__()
         if isinstance(enable_notebook, basestring):
             self.enable_notebook = enable_notebook.lower().strip() == 'true'
@@ -273,6 +276,11 @@ class IPCluster(DefaultClusterSetup):
                     + json_filename)
         finally:
             s.stop()
+        # copy to ipcontroller-client.json for backwards compatibility
+        json_copy = os.path.join(profile_dir, 'security', 'ipcontroller-client.json')
+        master.ssh.execute(('test -e {sym} && rm {sym}'
+                            ' ; cp {json} {sym} ; touch {json}')
+                           .format(sym=json_copy, json=json_filename))
         # Retrieve JSON connection info to make it possible to connect a local
         # client to the cluster controller
         if not os.path.isdir(IPCLUSTER_CACHE):
