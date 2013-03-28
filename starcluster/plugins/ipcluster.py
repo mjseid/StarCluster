@@ -66,8 +66,8 @@ def _kill_cmd(iptype, keepalive_cluster_ids=(), tokill_cluster_ids=()):
     else:
         cols = '-12'  # kill pids in comm column 3
 
-    cmd = ('comm {cols} <(pgrep -f "{iptype}.* --cluster-id {tokill}")'
-           ' <(pgrep -f "{iptype}.* --cluster-id {keepalive}")'
+    cmd = ('comm {cols} <(pgrep -f "{iptype}.* --cluster-id {tokill}" | sort)'
+           ' <(pgrep -f "{iptype}.* --cluster-id {keepalive}" | sort)'
            ' | xargs --no-run-if-empty kill').format(
                cols=cols, iptype=iptype, keepalive=keepalive, tokill=tokill)
     return cmd
@@ -198,7 +198,8 @@ class IPCluster(DefaultClusterSetup):
         master.ssh.execute('ipython profile create')
 
         f = master.ssh.remote_file('%s/ipcontroller_config.py' % profile_dir)
-        ssh_server = "@".join([user, master.public_dns_name])
+        ssh_server = "@".join([user,
+                               self._get_addr(master)])
         f.write('\n'.join([
             "c = get_config()",
             "c.HubFactory.ip='%s'" % master.private_ip_address,
@@ -243,6 +244,16 @@ class IPCluster(DefaultClusterSetup):
             ]))
         # else: use the slow default JSON packer
         f.close()
+
+    def _get_addr(self, node):
+        """Return first match of public dns, public ip, private dns, private ip
+        This gives better compatibility in scenarios where public address info
+        is non-existent, such as when using starcluster in AWS VPC"""
+        addr = [getattr(node, attr)
+                for attr in ('dns_name', 'ip_address',
+                             'private_dns_name', 'private_ip_address')
+                if getattr(node, attr)][0]
+        return addr
 
     def _start_cluster(self, master, profile_dir, cluster_id):
         n_engines = max(1, master.num_processors - 1)
@@ -314,7 +325,8 @@ class IPCluster(DefaultClusterSetup):
         ssl_cert = posixpath.join(profile_dir, '%s.pem' % user)
         if not master.ssh.isfile(user_cert):
             log.info("Creating SSL certificate for user %s" % user)
-            ssl_subj = "/C=US/ST=SC/L=STAR/O=Dis/CN=%s" % master.dns_name
+            ssl_subj = "/C=US/ST=SC/L=STAR/O=Dis/CN=%s" % (
+                self._get_addr(master))
             master.ssh.execute(
                 "openssl req -new -newkey rsa:4096 -days 365 "
                 '-nodes -x509 -subj %s -keyout %s -out %s' %
@@ -347,7 +359,7 @@ class IPCluster(DefaultClusterSetup):
             master.ssh.execute_async("ipython notebook --no-browser")
         self._authorize_port(master, notebook_port, 'notebook')
         log.info("IPython notebook URL: https://%s:%s" %
-                 (master.dns_name, notebook_port))
+                 (self._get_addr(master), notebook_port))
         log.info("The notebook password is: %s" % self.notebook_passwd)
         log.warn("Please check your local firewall settings if you're having "
                  "issues connecting to the IPython notebook",
@@ -373,6 +385,7 @@ class IPCluster(DefaultClusterSetup):
         user_home = master.getpwnam(user).pw_dir
         profile_dir = posixpath.join(user_home, '.ipython', 'profile_default')
         cluster_id = self.cluster_id_kls.new()
+        log.info('Using new cluster-id: %s' % cluster_id)
         master.ssh.switch_user(user)
         self._write_config(master, user, profile_dir, cluster_id)
         # Start the cluster and some engines on the master (leave 1
