@@ -801,7 +801,9 @@ class Cluster(object):
         if force_flat:
             spot_bid = None
         cluster_sg = self.cluster_group.name
-        instance_type = instance_type or self.node_instance_type
+        sg = self.ec2.get_group_or_none(self._security_group)
+	group_ids=sg.id
+	instance_type = instance_type or self.node_instance_type
         if placement_group or instance_type in static.PLACEMENT_GROUP_TYPES:
             region = self.ec2.region.name
             if not region in static.CLUSTER_REGIONS:
@@ -828,7 +830,8 @@ class Cluster(object):
         if spot_bid:
             for alias in aliases:
                 kwargs['user_data'] = self._get_cluster_userdata([alias])
-                resvs.extend(self.ec2.request_instances(image_id, **kwargs))
+                kwargs['security_group_ids'] = [group_ids]
+		resvs.extend(self.ec2.request_instances(image_id, **kwargs))
         else:
             resvs.append(self.ec2.request_instances(image_id, **kwargs))
         for resv in resvs:
